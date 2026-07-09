@@ -269,7 +269,7 @@ c4.metric("수집 기간", f"{df['day'].min()} ~ {df['day'].max()}")
 stopwords = analyzer.build_stopwords(exclude_teamnames, extra_sw)
 
 tabs = st.tabs(["📈 게시글 추이", f"🥧 {CAT_LABEL}별 점유율", "☁️ 워드클라우드",
-                "📊 상위 키워드", "🔥 급상승 키워드", "💬 화제 글"])
+                "📊 상위 키워드", "🔥 급상승 키워드", "💬 화제 글", "🔎 글 검색"])
 
 
 def scope_selector(key: str):
@@ -356,29 +356,68 @@ def hot_posts_fragment():
                       horizontal=True, key="hotmetric")
     n = st.slider("개수", 10, 50, 20, key="hotn")
     sort_col = "likes" if metric == "추천 수" else "comments"
-    if source == "mlbpark":
-        teams_by_id = df.groupby("id")["team"].apply(lambda s: ", ".join(sorted(set(s))))
-        uniq = df.drop_duplicates("id").copy()
-        uniq[CATCOL] = uniq["id"].map(teams_by_id)
-    else:
-        uniq = df.drop_duplicates("id").copy()
-    hot = uniq.sort_values(sort_col, ascending=False).head(n).copy()
-
-    def _fmt(ts):
-        if ts.hour == 0 and ts.minute == 0 and ts.second == 0:
-            return ts.strftime("%Y-%m-%d")
-        return ts.strftime("%Y-%m-%d %H:%M")
-    hot["작성"] = hot["date"].apply(_fmt)
-    show_cols = ["작성", CATCOL, "title", "comments"]
-    if "likes" in hot.columns:
-        show_cols.append("likes")
-    show_cols.append("url")
-    ren = {CATCOL: CAT_LABEL, "title": "제목", "comments": "댓글", "likes": "추천", "url": "링크"}
-    show = hot[show_cols].rename(columns=ren)
-    st.dataframe(show, hide_index=True, use_container_width=True,
-                 column_config={"링크": st.column_config.LinkColumn("바로가기", display_text="열기")})
+    hot = _dedupe_by_id(df).sort_values(sort_col, ascending=False).head(n)
+    _posts_table(hot)
     if source == "mlbpark":
         st.caption("작성일시는 최근(당일) 글만 시간까지, 과거 글은 날짜만 제공됩니다(출처 특성).")
+
+
+def _fmt_dt(ts):
+    """작성일시: 자정(시간 미상)은 날짜만, 그 외는 시간까지."""
+    if ts.hour == 0 and ts.minute == 0 and ts.second == 0:
+        return ts.strftime("%Y-%m-%d")
+    return ts.strftime("%Y-%m-%d %H:%M")
+
+
+def _dedupe_by_id(d: pd.DataFrame) -> pd.DataFrame:
+    """같은 글이 여러 팀에 걸린 경우 id로 합치고 팀을 묶어 표기(MLBpark)."""
+    if source == "mlbpark":
+        teams_by_id = d.groupby("id")["team"].apply(lambda s: ", ".join(sorted(set(s))))
+        u = d.drop_duplicates("id").copy()
+        u[CATCOL] = u["id"].map(teams_by_id)
+        return u
+    return d.drop_duplicates("id").copy()
+
+
+def _posts_table(res: pd.DataFrame):
+    res = res.copy()
+    res["작성"] = res["date"].apply(_fmt_dt)
+    cols = ["작성", CATCOL, "title", "comments"] + \
+           (["likes"] if "likes" in res.columns else []) + ["url"]
+    ren = {CATCOL: CAT_LABEL, "title": "제목", "comments": "댓글", "likes": "추천", "url": "링크"}
+    st.dataframe(res[cols].rename(columns=ren), hide_index=True, use_container_width=True,
+                 column_config={"링크": st.column_config.LinkColumn("바로가기", display_text="열기")})
+
+
+@st.fragment
+def search_fragment():
+    st.subheader("특정 텍스트가 포함된 글 찾기")
+    src = "제목·본문" if "body" in df.columns else "제목"
+    q = st.text_input(f"검색어 ({src}에서 검색 · 쉼표로 여러 개 = OR)",
+                      key="searchq", placeholder="예: 오스틴, 염경엽")
+    if not q.strip():
+        st.info(f"검색어를 입력하면 {src}에 그 텍스트가 포함된 글을 찾습니다.")
+        return
+    terms = [t.strip() for t in q.split(",") if t.strip()]
+    text = df["_text"].fillna("").str.lower()
+    mask = pd.Series(False, index=df.index)
+    for t in terms:
+        mask |= text.str.contains(t.lower(), regex=False)
+    res = _dedupe_by_id(df[mask])
+
+    c1, c2 = st.columns([1, 2])
+    c1.metric("검색 결과", f"{len(res):,}건")
+    if len(terms) > 1:
+        per = {t: int(text.str.contains(t.lower(), regex=False).sum()) for t in terms}
+        c2.caption("검색어별 매칭(중복 포함): " +
+                   " · ".join(f"**{t}** {n:,}" for t, n in per.items()))
+    if res.empty:
+        st.warning("일치하는 글이 없습니다. 다른 검색어를 시도해 보세요.")
+        return
+    sort = st.radio("정렬", ["최신순", "댓글 많은순"], horizontal=True, key="searchsort")
+    res = res.sort_values("date" if sort == "최신순" else "comments", ascending=False)
+    _posts_table(res)
+    st.caption(f"'{q}' 포함 글 {len(res):,}건 (기간·소스 필터 적용됨).")
 
 
 @st.fragment
@@ -490,6 +529,10 @@ with tabs[4]:
 # ------------------------------------------------------------------ 6) 화제 글
 with tabs[5]:
     hot_posts_fragment()
+
+# ------------------------------------------------------------------ 7) 글 검색
+with tabs[6]:
+    search_fragment()
 
 st.divider()
 with st.expander("원본 데이터 보기 / 다운로드"):
