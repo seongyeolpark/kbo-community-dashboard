@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 앱 캐시(런타임 생성물)
+cache/
+
+# 로컬 개발/미리보기 설정
+.claude/
+
+# 비밀값(있다면)
+.streamlit/secrets.toml
