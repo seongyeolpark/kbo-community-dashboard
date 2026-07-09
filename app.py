@@ -350,6 +350,38 @@ def keyword_bar_fragment():
 
 
 @st.fragment
+def hot_posts_fragment():
+    st.subheader("화제 글 Top")
+    metric = st.radio("정렬 기준", ["댓글 수", "추천 수"] if "likes" in df.columns else ["댓글 수"],
+                      horizontal=True, key="hotmetric")
+    n = st.slider("개수", 10, 50, 20, key="hotn")
+    sort_col = "likes" if metric == "추천 수" else "comments"
+    if source == "mlbpark":
+        teams_by_id = df.groupby("id")["team"].apply(lambda s: ", ".join(sorted(set(s))))
+        uniq = df.drop_duplicates("id").copy()
+        uniq[CATCOL] = uniq["id"].map(teams_by_id)
+    else:
+        uniq = df.drop_duplicates("id").copy()
+    hot = uniq.sort_values(sort_col, ascending=False).head(n).copy()
+
+    def _fmt(ts):
+        if ts.hour == 0 and ts.minute == 0 and ts.second == 0:
+            return ts.strftime("%Y-%m-%d")
+        return ts.strftime("%Y-%m-%d %H:%M")
+    hot["작성"] = hot["date"].apply(_fmt)
+    show_cols = ["작성", CATCOL, "title", "comments"]
+    if "likes" in hot.columns:
+        show_cols.append("likes")
+    show_cols.append("url")
+    ren = {CATCOL: CAT_LABEL, "title": "제목", "comments": "댓글", "likes": "추천", "url": "링크"}
+    show = hot[show_cols].rename(columns=ren)
+    st.dataframe(show, hide_index=True, use_container_width=True,
+                 column_config={"링크": st.column_config.LinkColumn("바로가기", display_text="열기")})
+    if source == "mlbpark":
+        st.caption("작성일시는 최근(당일) 글만 시간까지, 과거 글은 날짜만 제공됩니다(출처 특성).")
+
+
+@st.fragment
 def rising_fragment():
     st.subheader("급상승 키워드 (기간 전반부 → 후반부)")
     _, sub = scope_selector("rise_scope")
@@ -457,34 +489,7 @@ with tabs[4]:
 
 # ------------------------------------------------------------------ 6) 화제 글
 with tabs[5]:
-    st.subheader("화제 글 Top")
-    metric = st.radio("정렬 기준", ["댓글 수", "추천 수"] if "likes" in df.columns else ["댓글 수"],
-                      horizontal=True, key="hotmetric")
-    n = st.slider("개수", 10, 50, 20, key="hotn")
-    sort_col = "likes" if metric == "추천 수" else "comments"
-    if source == "mlbpark":
-        teams_by_id = df.groupby("id")["team"].apply(lambda s: ", ".join(sorted(set(s))))
-        uniq = df.drop_duplicates("id").copy()
-        uniq[CATCOL] = uniq["id"].map(teams_by_id)
-    else:
-        uniq = df.drop_duplicates("id").copy()
-    hot = uniq.sort_values(sort_col, ascending=False).head(n).copy()
-
-    def _fmt(ts):
-        if ts.hour == 0 and ts.minute == 0 and ts.second == 0:
-            return ts.strftime("%Y-%m-%d")
-        return ts.strftime("%Y-%m-%d %H:%M")
-    hot["작성"] = hot["date"].apply(_fmt)
-    show_cols = ["작성", CATCOL, "title", "comments"]
-    if "likes" in hot.columns:
-        show_cols.append("likes")
-    show_cols.append("url")
-    ren = {CATCOL: CAT_LABEL, "title": "제목", "comments": "댓글", "likes": "추천", "url": "링크"}
-    show = hot[show_cols].rename(columns=ren)
-    st.dataframe(show, hide_index=True, use_container_width=True,
-                 column_config={"링크": st.column_config.LinkColumn("바로가기", display_text="열기")})
-    if source == "mlbpark":
-        st.caption("작성일시는 최근(당일) 글만 시간까지, 과거 글은 날짜만 제공됩니다(출처 특성).")
+    hot_posts_fragment()
 
 st.divider()
 with st.expander("원본 데이터 보기 / 다운로드"):
