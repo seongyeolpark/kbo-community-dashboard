@@ -395,7 +395,7 @@ def search_fragment():
     st.subheader("특정 텍스트가 포함된 글 찾기")
     src = "제목·본문" if "body" in df.columns else "제목"
     q = st.text_input(f"검색어 ({src}에서 검색 · 쉼표로 여러 개 = OR)",
-                      key="searchq", placeholder="예: 오스틴, 염경엽")
+                      key="searchq", placeholder="예: 오스틴, 홍창기")
     if not q.strip():
         st.info(f"검색어를 입력하면 {src}에 그 텍스트가 포함된 글을 찾습니다.")
         return
@@ -440,10 +440,11 @@ def rising_fragment():
 
 
 LINE_COLORS = [viz_color(h) for h in GENERIC_HUES]
-# LG 로스터/인물 기본값(편집 가능). 부분일치(제목/본문에 이름 포함)로 집계.
-DEFAULT_ROSTER = ("오스틴, 홍창기, 문보경, 오지환, 신민재, 박해민, 김현수, 문성주, 박동원, "
-                  "이재원, 구본혁, 류지혁, 임찬규, 손주영, 켈리, 엔스, 치리노스, 고우석, "
-                  "유영찬, 함덕주, 정우영, 이정용, 최원태, 송승기, 염경엽")
+# LG 로스터/인물 기본값(2026 시즌 핵심, 편집 가능). 부분일치(제목/본문에 이름 포함)로 집계.
+# 외국인·FA·트레이드로 매년 바뀌므로 명단 칸에서 자유롭게 수정하세요.
+DEFAULT_ROSTER = ("오스틴, 홍창기, 문보경, 오지환, 신민재, 박해민, 문성주, 박동원, 이재원, "
+                  "구본혁, 임찬규, 손주영, 송승기, 유영찬, 함덕주, 정우영, 이정용, 송찬의, "
+                  "문정빈, 우강훈, 이우찬, 이주헌, 톨허스트, 배제준, 리오스, 이상영, 김진수")
 
 
 def _hbar(words, counts, cmap):
@@ -532,7 +533,8 @@ def player_rank_fragment():
     ranked = sorted(counts.items(), key=lambda x: x[1])[-top_n:]   # 오름차순(막대 아래→위)
     _hbar([k for k, _ in ranked], [v for _, v in ranked], team_seq(LG_COLOR))
     src = "제목·본문" if "body" in df.columns else "제목"
-    st.caption(f"각 인물명이 {src}에 포함된 글 수. 색이 진할수록 많이 언급됨. 명단은 위에서 편집 가능.")
+    st.caption(f"각 인물명이 {src}에 포함된 글 수. 색이 진할수록 많이 언급됨. "
+               "기본 명단은 2026 시즌 핵심 선수이며, 외국인·FA 등 변동은 위 칸에서 편집하세요.")
 
 
 # ------------------------------------------------------------------ 1) 일별 추이
