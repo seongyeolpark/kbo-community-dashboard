@@ -269,7 +269,8 @@ c4.metric("수집 기간", f"{df['day'].min()} ~ {df['day'].max()}")
 stopwords = analyzer.build_stopwords(exclude_teamnames, extra_sw)
 
 tabs = st.tabs(["📈 게시글 추이", f"🥧 {CAT_LABEL}별 점유율", "☁️ 워드클라우드",
-                "📊 상위 키워드", "🔥 급상승 키워드", "💬 화제 글", "🔎 글 검색"])
+                "📊 상위 키워드", "📉 키워드 추이", "🏅 선수 랭킹",
+                "🔥 급상승 키워드", "💬 화제 글", "🔎 글 검색"])
 
 
 def scope_selector(key: str):
@@ -438,6 +439,102 @@ def rising_fragment():
                "전반부(앞쪽 절반) 대비 언급이 급증한 순. '🆕 신규'=전반부 0회.")
 
 
+LINE_COLORS = [viz_color(h) for h in GENERIC_HUES]
+# LG 로스터/인물 기본값(편집 가능). 부분일치(제목/본문에 이름 포함)로 집계.
+DEFAULT_ROSTER = ("오스틴, 홍창기, 문보경, 오지환, 신민재, 박해민, 김현수, 문성주, 박동원, "
+                  "이재원, 구본혁, 류지혁, 임찬규, 손주영, 켈리, 엔스, 치리노스, 고우석, "
+                  "유영찬, 함덕주, 정우영, 이정용, 최원태, 송승기, 염경엽")
+
+
+def _hbar(words, counts, cmap):
+    """가로 막대(빈도 그라데이션 + 값 라벨) 공통 렌더."""
+    cmax, cmin = max(counts), min(counts)
+    span = max(cmax - cmin, 1)
+    colors = [cmap(0.18 + 0.82 * (c - cmin) / span) for c in counts]
+    fig, ax = plt.subplots(figsize=(10, max(3.0, len(words) * 0.33)))
+    ax.barh(words, counts, color=colors, height=0.72, zorder=3)
+    for s in ("top", "right", "left", "bottom"):
+        ax.spines[s].set_visible(False)
+    ax.tick_params(length=0, labelsize=10)
+    ax.set_xlim(0, cmax * 1.12)
+    ax.xaxis.set_visible(False)
+    for yi, c in enumerate(counts):
+        ax.text(c + cmax * 0.012, yi, str(c), va="center", fontsize=9, color=INK2)
+    fig.tight_layout()
+    st.pyplot(fig)
+    plt.close(fig)
+
+
+@st.fragment
+def keyword_trend_fragment():
+    st.subheader("키워드 언급 추이 · 연관어")
+    src = "제목·본문" if "body" in df.columns else "제목"
+    q = st.text_input(f"키워드 ({src} · 쉼표로 여러 개 비교)", value="오스틴, 홍창기",
+                      key="ktq", placeholder="예: 오스틴, 홍창기")
+    terms = [t.strip() for t in q.split(",") if t.strip()]
+    if not terms:
+        st.info("키워드를 입력하세요.")
+        return
+    low = df["_text"].fillna("").str.lower()
+    days_all = sorted(df["day"].unique())
+    fig, ax = plt.subplots(figsize=(11, 4.0))
+    hit = False
+    for i, t in enumerate(terms):
+        m = low.str.contains(t.lower(), regex=False)
+        if not m.any():
+            continue
+        hit = True
+        s = df[m].groupby("day").size().reindex(days_all, fill_value=0)
+        ax.plot(days_all, s.values, color=LINE_COLORS[i % len(LINE_COLORS)], lw=2.4,
+                marker="o", ms=5, label=t, markeredgecolor=SURFACE, markeredgewidth=1.0,
+                zorder=3, solid_capstyle="round")
+    if not hit:
+        plt.close(fig)
+        st.warning("해당 키워드가 포함된 글이 없습니다.")
+        return
+    chrome(ax)
+    ax.set_ylim(bottom=0)
+    step = max(1, len(days_all) // 10)
+    ax.set_xticks(days_all[::step])
+    ax.set_xticklabels([d.strftime("%m.%d") for d in days_all[::step]])
+    ax.legend(frameon=False, fontsize=9, ncol=min(len(terms), 5), loc="upper center",
+              bbox_to_anchor=(0.5, 1.14), labelcolor=INK)
+    fig.tight_layout()
+    st.pyplot(fig)
+    plt.close(fig)
+    st.caption("각 키워드가 포함된 글 수(일별).")
+    st.markdown("**연관 키워드** — 아래 키워드와 함께 자주 등장한 단어")
+    focus = st.selectbox("기준 키워드", terms, key="cofocus")
+    co = analyzer.co_occurrence(df["_text"].tolist(), focus, stopwords, top_n=20)
+    if not co:
+        st.info("연관어를 뽑을 데이터가 부족합니다.")
+        return
+    _hbar([w for w, _ in co][::-1], [c for _, c in co][::-1], team_seq(LG_COLOR))
+    st.caption(f"'{focus}' 글에서 함께 많이 등장한 단어(글 단위 집계).")
+
+
+@st.fragment
+def player_rank_fragment():
+    st.subheader("LG 선수·인물 언급 랭킹")
+    names_raw = st.text_area("대상 명단 (쉼표로 구분 · 편집 가능)", value=DEFAULT_ROSTER,
+                             key="roster", height=90)
+    names = [n.strip() for n in names_raw.replace("\n", ",").split(",") if n.strip()]
+    if not names:
+        st.info("명단을 입력하세요.")
+        return
+    top_n = st.slider("표시 인원", 5, 30, 15, key="rostern")
+    low = df["_text"].fillna("").str.lower()
+    counts = {n: int(low.str.contains(n.lower(), regex=False).sum()) for n in names}
+    counts = {k: v for k, v in counts.items() if v > 0}
+    if not counts:
+        st.warning("언급된 대상이 없습니다.")
+        return
+    ranked = sorted(counts.items(), key=lambda x: x[1])[-top_n:]   # 오름차순(막대 아래→위)
+    _hbar([k for k, _ in ranked], [v for _, v in ranked], team_seq(LG_COLOR))
+    src = "제목·본문" if "body" in df.columns else "제목"
+    st.caption(f"각 인물명이 {src}에 포함된 글 수. 색이 진할수록 많이 언급됨. 명단은 위에서 편집 가능.")
+
+
 # ------------------------------------------------------------------ 1) 일별 추이
 with tabs[0]:
     st.subheader("일별 게시글 수 추이")
@@ -518,20 +615,20 @@ with tabs[1]:
         st.dataframe(share.rename(columns={CATCOL: CAT_LABEL, "count": "글 수"}),
                      hide_index=True, use_container_width=True)
 
-# ------------------------------------------------------------------ 3~5) fragment 탭
+# ------------------------------------------------------------------ fragment 탭들
 with tabs[2]:
     wordcloud_fragment()
 with tabs[3]:
     keyword_bar_fragment()
 with tabs[4]:
-    rising_fragment()
-
-# ------------------------------------------------------------------ 6) 화제 글
+    keyword_trend_fragment()
 with tabs[5]:
-    hot_posts_fragment()
-
-# ------------------------------------------------------------------ 7) 글 검색
+    player_rank_fragment()
 with tabs[6]:
+    rising_fragment()
+with tabs[7]:
+    hot_posts_fragment()
+with tabs[8]:
     search_fragment()
 
 st.divider()

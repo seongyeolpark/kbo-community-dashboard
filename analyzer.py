@@ -98,6 +98,21 @@ def word_frequencies(titles: list[str], stopwords: set[str]) -> Counter:
     return c
 
 
+def co_occurrence(texts, keyword: str, stopwords: set[str], top_n: int = 20) -> list[tuple]:
+    """keyword가 포함된 글들에서, keyword를 제외하고 함께 자주 등장하는 단어 Top."""
+    kw = keyword.strip().lower()
+    if not kw:
+        return []
+    c: Counter = Counter()
+    for t in texts:
+        s = str(t)
+        if kw in s.lower():
+            for tok in set(tokenize(s, stopwords)):   # 글당 1회(중복 토큰 제거)
+                if tok != kw and kw not in tok and tok not in kw:
+                    c[tok] += 1
+    return c.most_common(top_n)
+
+
 def make_wordcloud(freq: Counter, max_words: int = 120, colormap="tab10",
                    background: str = "#fcfcfb"):
     """빈도 dict로 WordCloud 객체를 생성한다. 빈도가 없으면 None.
