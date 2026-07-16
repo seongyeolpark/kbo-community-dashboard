@@ -24,7 +24,20 @@ _FONT_CANDIDATES = [
 ]
 FONT_PATH = next((p for p in _FONT_CANDIDATES if os.path.exists(p)), None)
 
-# 한글 토큰(2자 이상) 또는 영문/숫자 혼합 토큰(2자 이상)
+# 형태소 분석기(kiwipiepy): 자바 없이 동작. 있으면 품사 기반으로 명사만 추출해
+# 동사(VV)·형용사(VA)·부사·조사·어미를 자동 제외한다. 없으면 정규식 방식으로 대체.
+# 남길 품사: 일반명사(NNG)·고유명사(NNP)·외국어(SL, 예: LG/FA/KBO)
+_KEEP_TAGS = {"NNG", "NNP", "SL"}
+try:
+    from kiwipiepy import Kiwi
+
+    _kiwi = Kiwi()
+    HAS_KIWI = True
+except Exception:
+    _kiwi = None
+    HAS_KIWI = False
+
+# 한글 토큰(2자 이상) 또는 영문/숫자 혼합 토큰(2자 이상) — 정규식 fallback용
 _TOKEN_RE = re.compile(r"[가-힣]{2,}|[A-Za-z][A-Za-z0-9]+")
 
 # 제거할 조사(토큰 끝) — 제거 후 2자 이상 남을 때만 적용
@@ -68,12 +81,31 @@ def _strip_josa(tok: str) -> str:
     return tok
 
 
-def tokenize(text: str, stopwords: set[str]) -> list[str]:
-    out = []
+def _kiwi_candidates(text: str) -> list[str]:
+    """형태소 분석으로 명사·외국어만 추출(동사/형용사/부사/조사/어미 제외)."""
+    res = []
+    for t in _kiwi.tokenize(text):
+        if t.tag in _KEEP_TAGS:
+            res.append(t.form.lower() if t.tag == "SL" else t.form)
+    return res
+
+
+def _regex_candidates(text: str) -> list[str]:
+    """kiwi가 없을 때 fallback: 정규식 토큰 + 조사 제거."""
+    res = []
     for m in _TOKEN_RE.findall(text):
         tok = m.lower() if re.match(r"[A-Za-z]", m) else m
         if re.match(r"[가-힣]", tok):
             tok = _strip_josa(tok)
+        res.append(tok)
+    return res
+
+
+def tokenize(text: str, stopwords: set[str]) -> list[str]:
+    text = str(text)
+    cands = _kiwi_candidates(text) if HAS_KIWI else _regex_candidates(text)
+    out = []
+    for tok in cands:
         if len(tok) < 2:
             continue
         if tok in stopwords:

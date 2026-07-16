@@ -4,3 +4,4 @@ requests>=2.28
 beautifulsoup4>=4.11
 matplotlib>=3.7
 wordcloud>=1.9
+kiwipiepy>=0.20
