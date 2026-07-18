@@ -470,8 +470,13 @@ def _hbar(words, counts, cmap):
 def keyword_trend_fragment():
     st.subheader("키워드 언급 추이 · 연관어")
     src = "제목·본문" if "body" in df.columns else "제목"
-    q = st.text_input(f"키워드 ({src} · 쉼표로 여러 개 비교)", value="오스틴, 홍창기",
-                      key="ktq", placeholder="예: 오스틴, 홍창기")
+    # 기본값: 현재 데이터의 상위 키워드 10개 자동 세팅.
+    # 위젯 key에 데이터 시그니처를 붙여, 새 분석 때마다 상위 10개로 갱신되고
+    # 같은 데이터 안에서 사용자가 수정하면 그 값이 유지되도록 한다.
+    top10 = [w for w, _ in analyzer.word_frequencies(df["_text"].tolist(), stopwords).most_common(10)]
+    sig = f"{source}_{period_days}_{len(df)}"
+    q = st.text_input(f"키워드 ({src} · 쉼표로 여러 개 · 기본=상위 10개 자동)",
+                      value=", ".join(top10), key=f"ktq_{sig}", placeholder="예: 오스틴, 홍창기")
     terms = [t.strip() for t in q.split(",") if t.strip()]
     if not terms:
         st.info("키워드를 입력하세요.")
