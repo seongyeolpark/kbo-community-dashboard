@@ -15,6 +15,7 @@ from matplotlib import font_manager
 from matplotlib.colors import LinearSegmentedColormap, ListedColormap, to_rgb
 
 import analyzer
+import lg_roster
 import naver_cafe
 import scraper
 
@@ -440,11 +441,11 @@ def rising_fragment():
 
 
 LINE_COLORS = [viz_color(h) for h in GENERIC_HUES]
-# LG 로스터/인물 기본값(2026 시즌 핵심, 편집 가능). 부분일치(제목/본문에 이름 포함)로 집계.
-# 외국인·FA·트레이드로 매년 바뀌므로 명단 칸에서 자유롭게 수정하세요.
-DEFAULT_ROSTER = ("오스틴, 홍창기, 문보경, 오지환, 신민재, 박해민, 문성주, 박동원, 이재원, "
-                  "구본혁, 임찬규, 손주영, 송승기, 유영찬, 함덕주, 정우영, 이정용, 송찬의, "
-                  "문정빈, 우강훈, 이우찬, 이주헌, 톨허스트, 배제준, 리오스, 이상영, 김진수")
+
+
+@st.cache_data(ttl=21600, show_spinner=False)   # 6시간 캐시(로스터는 자주 안 바뀜)
+def get_lg_roster():
+    return lg_roster.get_roster()
 
 
 def _hbar(words, counts, cmap):
@@ -522,8 +523,12 @@ def keyword_trend_fragment():
 @st.fragment
 def player_rank_fragment():
     st.subheader("LG 선수·인물 언급 랭킹")
-    names_raw = st.text_area("대상 명단 (쉼표로 구분 · 편집 가능)", value=DEFAULT_ROSTER,
-                             key="roster", height=90)
+    roster, official = get_lg_roster()
+    src_note = ("공식 홈페이지 1군 로스터 자동 등록" if official
+                else "공식 페이지 연결 실패 → 최근 스냅샷 사용")
+    sig = f"{len(roster)}_{roster[0] if roster else 'x'}"   # 로스터 바뀌면 기본값 갱신
+    names_raw = st.text_area(f"대상 명단 ({src_note} · 편집 가능)", value=", ".join(roster),
+                             key=f"roster_{sig}", height=90)
     names = [n.strip() for n in names_raw.replace("\n", ",").split(",") if n.strip()]
     if not names:
         st.info("명단을 입력하세요.")
@@ -539,7 +544,7 @@ def player_rank_fragment():
     _hbar([k for k, _ in ranked], [v for _, v in ranked], team_seq(LG_COLOR))
     src = "제목·본문" if "body" in df.columns else "제목"
     st.caption(f"각 인물명이 {src}에 포함된 글 수. 색이 진할수록 많이 언급됨. "
-               "기본 명단은 2026 시즌 핵심 선수이며, 외국인·FA 등 변동은 위 칸에서 편집하세요.")
+               "명단은 LG 공식 1군 로스터에서 자동 등록되며, 위 칸에서 직접 편집할 수 있습니다.")
 
 
 # ------------------------------------------------------------------ 1) 일별 추이
