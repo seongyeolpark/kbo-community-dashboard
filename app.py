@@ -148,7 +148,12 @@ else:
 
 st.sidebar.markdown("---")
 exclude_teamnames = st.sidebar.checkbox("워드클라우드에서 팀명/약칭 제외", value=True)
-extra_sw_raw = st.sidebar.text_input("추가 불용어 (쉼표로 구분)", value="")
+# 쌍둥이마당은 게시판 특성상 잦은 잡음 단어를 기본 불용어로 자동 채운다(편집 가능).
+CAFE_DEFAULT_SW = "직관, 공유, 주차, 후기, 감사, 양도, vs"
+extra_sw_raw = st.sidebar.text_input(
+    "추가 불용어 (쉼표로 구분)",
+    value=CAFE_DEFAULT_SW if source == "cafe" else "",
+    key=f"extrasw_{source}")
 extra_sw = {s for s in extra_sw_raw.split(",")} if extra_sw_raw else set()
 run = st.sidebar.button("🔍 수집 & 분석", type="primary", use_container_width=True)
 
