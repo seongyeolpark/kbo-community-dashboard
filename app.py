@@ -355,6 +355,41 @@ def keyword_bar_fragment():
     plt.close(fig)
     st.caption("막대 색이 진할수록 언급 빈도가 높음.")
 
+    # --- 키워드 감성(긍·부정) 지수 ---
+    st.markdown("**키워드 감성 지수** — 키워드가 포함된 글의 긍·부정 어휘 기반 (−1 부정 ~ +1 긍정)")
+    low = sub["_text"].fillna("").str.lower()
+    sent = sub["_text"].apply(analyzer.sentiment_counts)
+    posc = sent.apply(lambda x: x[0])
+    negc = sent.apply(lambda x: x[1])
+    idx_rows = []
+    for w, _c in items:
+        m = low.str.contains(w, regex=False)
+        P, N = int(posc[m].sum()), int(negc[m].sum())
+        idx = (P - N) / (P + N) if (P + N) > 0 else 0.0
+        idx_rows.append((w, idx, P, N))
+    words2 = [r[0] for r in idx_rows][::-1]
+    idxs = [r[1] for r in idx_rows][::-1]
+    POS_C, NEG_C = viz_color("#0ca30c"), viz_color("#e34948")
+    bcolors = [POS_C if v > 0.02 else (NEG_C if v < -0.02 else MUTED) for v in idxs]
+    fig, ax = plt.subplots(figsize=(10, max(3.2, top_n * 0.32)))
+    ax.barh(words2, idxs, color=bcolors, height=0.72, zorder=3)
+    ax.axvline(0, color=BASELINE, linewidth=1)
+    for s in ("top", "right", "left", "bottom"):
+        ax.spines[s].set_visible(False)
+    ax.tick_params(length=0, labelsize=10)
+    ax.set_xlim(-1.08, 1.08)
+    ax.xaxis.set_visible(False)
+    for yi, v in enumerate(idxs):
+        if abs(v) < 0.005:
+            continue
+        ax.text(v + (0.03 if v >= 0 else -0.03), yi, f"{v:+.2f}", va="center",
+                ha="left" if v >= 0 else "right", fontsize=8.5, color=INK2)
+    fig.tight_layout()
+    st.pyplot(fig)
+    plt.close(fig)
+    st.caption("초록(+)=긍정 여론 우세, 빨강(−)=부정 우세, 회색=중립/판단 근거 적음. "
+               "감성 사전 기반 근사치입니다.")
+
 
 @st.fragment
 def hot_posts_fragment():
