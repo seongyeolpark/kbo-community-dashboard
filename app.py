@@ -323,6 +323,14 @@ def wordcloud_fragment():
     st.caption(f"{src} {len(sub):,}건 기준 · 상위 {min(len(freq), 120)}개 단어")
 
 
+SENT_POS = viz_color("#0ca30c")   # 긍정(초록)
+SENT_NEG = viz_color("#e34948")   # 부정(빨강)
+
+
+def _sent_label_color(v: float) -> str:
+    return SENT_POS if v > 0.02 else (SENT_NEG if v < -0.02 else INK2)
+
+
 @st.fragment
 def keyword_bar_fragment():
     st.subheader("상위 언급 키워드")
@@ -335,6 +343,18 @@ def keyword_bar_fragment():
     if not items:
         st.info("표시할 단어가 없습니다.")
         return
+
+    # 키워드별 감성 지수 먼저 계산(두 차트의 글자색·막대에 공통 사용)
+    low = sub["_text"].fillna("").str.lower()
+    sent = sub["_text"].apply(analyzer.sentiment_counts)
+    posc = sent.apply(lambda x: x[0])
+    negc = sent.apply(lambda x: x[1])
+    sidx = {}
+    for w, _c in items:
+        m = low.str.contains(w, regex=False)
+        P, N = int(posc[m].sum()), int(negc[m].sum())
+        sidx[w] = (P - N) / (P + N) if (P + N) > 0 else 0.0
+
     words = [w for w, _ in items][::-1]
     counts = [c for _, c in items][::-1]
     cmax, cmin = max(counts), min(counts)
@@ -350,40 +370,31 @@ def keyword_bar_fragment():
     for bar, c in zip(bars, counts):
         ax.text(bar.get_width() + cmax * 0.012, bar.get_y() + bar.get_height() / 2,
                 str(c), va="center", ha="left", fontsize=9, color=INK2)
+    for lbl in ax.get_yticklabels():   # 키워드 글자색을 긍·부정 색으로
+        lbl.set_color(_sent_label_color(sidx.get(lbl.get_text(), 0.0)))
     fig.tight_layout()
     st.pyplot(fig)
     plt.close(fig)
-    st.caption("막대 색이 진할수록 언급 빈도가 높음.")
+    st.caption("막대 색이 진할수록 언급 빈도가 높음. 키워드 글자색: 초록=긍정·빨강=부정 여론.")
 
     # --- 키워드 감성(긍·부정) 지수 ---
     st.markdown("**키워드 감성 지수** — 키워드가 포함된 글의 긍·부정 어휘 기반 (−1 부정 ~ +1 긍정)")
-    low = sub["_text"].fillna("").str.lower()
-    sent = sub["_text"].apply(analyzer.sentiment_counts)
-    posc = sent.apply(lambda x: x[0])
-    negc = sent.apply(lambda x: x[1])
-    idx_rows = []
-    for w, _c in items:
-        m = low.str.contains(w, regex=False)
-        P, N = int(posc[m].sum()), int(negc[m].sum())
-        idx = (P - N) / (P + N) if (P + N) > 0 else 0.0
-        idx_rows.append((w, idx, P, N))
-    words2 = [r[0] for r in idx_rows][::-1]
-    idxs = [r[1] for r in idx_rows][::-1]
-    POS_C, NEG_C = viz_color("#0ca30c"), viz_color("#e34948")
-    bcolors = [POS_C if v > 0.02 else (NEG_C if v < -0.02 else MUTED) for v in idxs]
+    words2 = words                       # 빈도 막대와 같은 순서(아래→위)
+    idxs = [sidx[w] for w in words2]
+    bcolors = [_sent_label_color(v) if abs(v) > 0.02 else MUTED for v in idxs]
     fig, ax = plt.subplots(figsize=(10, max(3.2, top_n * 0.32)))
     ax.barh(words2, idxs, color=bcolors, height=0.72, zorder=3)
     ax.axvline(0, color=BASELINE, linewidth=1)
     for s in ("top", "right", "left", "bottom"):
         ax.spines[s].set_visible(False)
     ax.tick_params(length=0, labelsize=10)
-    ax.set_xlim(-1.08, 1.08)
+    ax.set_xlim(-1.1, 1.42)              # 오른쪽에 값 표시용 여백
     ax.xaxis.set_visible(False)
-    for yi, v in enumerate(idxs):
-        if abs(v) < 0.005:
-            continue
-        ax.text(v + (0.03 if v >= 0 else -0.03), yi, f"{v:+.2f}", va="center",
-                ha="left" if v >= 0 else "right", fontsize=8.5, color=INK2)
+    for yi, v in enumerate(idxs):        # 값은 오른쪽 열에 고정(왼쪽 키워드와 겹침 방지)
+        ax.text(1.16, yi, f"{v:+.2f}", va="center", ha="left", fontsize=8.5,
+                color=_sent_label_color(v))
+    for lbl in ax.get_yticklabels():
+        lbl.set_color(_sent_label_color(sidx.get(lbl.get_text(), 0.0)))
     fig.tight_layout()
     st.pyplot(fig)
     plt.close(fig)
