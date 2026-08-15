@@ -27,7 +27,10 @@ HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
-    )
+    ),
+    "Referer": "https://mlbpark.donga.com/mp/b.php?b=kbotown",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
 }
 
 # KBO 10개 구단: 표시명 -> 검색어(MLBpark 검색에 넣을 질의어)
@@ -136,11 +139,13 @@ def _scrape_one_team(
     seen_ids: set[str] = set()
     hit_cutoff = False
     pages_fetched = 0
+    error = None
     for i in range(max_pages):
         offset = 1 + i * PAGE_SIZE
         try:
             html = _fetch_page(query, offset)
         except Exception as e:
+            error = f"{type(e).__name__}: {e}"
             if progress_cb:
                 progress_cb(team, i + 1, max_pages, f"{team} {i + 1}p 요청 실패: {e}")
             break
@@ -165,6 +170,7 @@ def _scrape_one_team(
         "hit_cutoff": hit_cutoff,
         "cap_reached": (not hit_cutoff) and pages_fetched >= max_pages,
         "fetched_rows": len(fresh),
+        "error": error,
     }
     return fresh, meta
 

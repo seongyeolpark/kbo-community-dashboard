@@ -239,6 +239,15 @@ else:
 
 if df.empty:
     st.warning("해당 조건에 수집된 글이 없습니다. 기간/설정을 바꿔 다시 시도하세요.")
+    if source == "mlbpark":
+        errs = {t: m.get("error") for t, m in meta.get("per_team", {}).items()
+                if m.get("error")}
+        if errs:
+            st.error("⚠️ MLBpark 요청이 실패했습니다. 호스팅 환경(해외 IP)에서 "
+                     "mlbpark.donga.com 접근이 차단됐을 수 있습니다:\n\n"
+                     + "\n".join(f"- {t}: `{e}`" for t, e in errs.items()))
+            st.info("MLBpark은 국내(사내/개인 PC·국내 클라우드) 환경에서 실행하면 정상 수집됩니다. "
+                    "네이버 카페(쌍둥이마당)는 해외에서도 동작합니다.")
     st.stop()
 
 df["day"] = df["date"].dt.date
