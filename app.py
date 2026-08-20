@@ -16,6 +16,7 @@ from matplotlib.colors import LinearSegmentedColormap, ListedColormap, to_rgb
 
 import analyzer
 import lg_roster
+import metrics
 import naver_cafe
 import scraper
 
@@ -109,6 +110,11 @@ def chrome(ax, ygrid: bool = True):
 
 
 st.set_page_config(page_title="KBO 커뮤니티 트렌드 분석", page_icon="⚾", layout="wide")
+
+# 접속 지표(개인정보 없이 일·시간별 카운트만) — 세션당 1회 기록
+if "visit_logged" not in st.session_state:
+    st.session_state["visit_logged"] = True
+    metrics.bump("visit")
 
 SOURCES = {"MLBpark KBO타운": "mlbpark", "쌍둥이마당 (LG 팬카페)": "cafe"}
 PERIODS = {f"{d}일": d for d in range(1, 8)}   # 1~7일
@@ -208,6 +214,7 @@ if run:
                                                  include_body, body_cap))
     else:
         st.session_state["data"] = ("cafe", load_cafe(period_days, max_pages))
+    metrics.bump("analysis")   # 수집 횟수 기록(개인정보 없음)
 
 data = st.session_state.get("data")
 if not data:
