@@ -45,9 +45,17 @@ def _worksheet():
             return None
         info = dict(st.secrets["gcp_service_account"])
         key = st.secrets["metrics"]["sheet_key"]
+        ws_name = st.secrets["metrics"].get("worksheet")   # 선택: 탭(워크시트) 이름
         creds = Credentials.from_service_account_info(
             info, scopes=["https://www.googleapis.com/auth/spreadsheets"])
-        ws = gspread.authorize(creds).open_by_key(key).sheet1
+        sh = gspread.authorize(creds).open_by_key(key)
+        if ws_name:
+            try:
+                ws = sh.worksheet(ws_name)             # 지정 탭 사용
+            except gspread.WorksheetNotFound:
+                ws = sh.add_worksheet(title=ws_name, rows=2000, cols=8)  # 없으면 생성
+        else:
+            ws = sh.sheet1                             # 미지정 시 첫 번째 탭
         if ws.acell("A1").value != "date":       # 헤더 없으면 생성
             ws.update("A1:D1", [HEADER])
         return ws
