@@ -163,6 +163,10 @@ extra_sw_raw = st.sidebar.text_input(
 extra_sw = {s for s in extra_sw_raw.split(",")} if extra_sw_raw else set()
 run = st.sidebar.button("🔍 수집 & 분석", type="primary", use_container_width=True)
 
+# 진단 모드: URL에 ?debug=1 붙이면 지표 기록 연결 상태를 표시
+if st.query_params.get("debug") == "1":
+    st.sidebar.caption(f"🔧 지표기록 상태: {metrics.status()}")
+
 
 # ------------------------------------------------------------------ 데이터 수집
 @st.cache_data(show_spinner=False, ttl=600)

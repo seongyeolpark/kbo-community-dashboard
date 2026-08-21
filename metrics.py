@@ -35,32 +35,52 @@ def _now_kst() -> datetime.datetime:
     return datetime.datetime.now(KST)
 
 
+LAST_STATUS = "미초기화"   # 진단용(?debug=1에서 표시)
+
+
 @st.cache_resource(show_spinner=False)
 def _worksheet():
     """구글 시트 워크시트 핸들(캐시). 미설정/실패 시 None."""
+    global LAST_STATUS
     if not _HAS_GSPREAD:
+        LAST_STATUS = "gspread 미설치"
         return None
     try:
         if "gcp_service_account" not in st.secrets or "metrics" not in st.secrets:
+            LAST_STATUS = "secrets 없음(gcp_service_account/metrics)"
             return None
         info = dict(st.secrets["gcp_service_account"])
-        key = st.secrets["metrics"]["sheet_key"]
-        ws_name = st.secrets["metrics"].get("worksheet")   # 선택: 탭(워크시트) 이름
+        meta = dict(st.secrets["metrics"])          # dict 변환 → .get 안전
+        key = meta.get("sheet_key")
+        ws_name = meta.get("worksheet")             # 선택: 탭(워크시트) 이름
+        if not key:
+            LAST_STATUS = "sheet_key 없음"
+            return None
         creds = Credentials.from_service_account_info(
             info, scopes=["https://www.googleapis.com/auth/spreadsheets"])
         sh = gspread.authorize(creds).open_by_key(key)
         if ws_name:
-            try:
-                ws = sh.worksheet(ws_name)             # 지정 탭 사용
-            except gspread.WorksheetNotFound:
-                ws = sh.add_worksheet(title=ws_name, rows=2000, cols=8)  # 없으면 생성
+            ws = None
+            for w in sh.worksheets():               # 이름으로 탭 찾기(공백 무시)
+                if w.title.strip() == str(ws_name).strip():
+                    ws = w
+                    break
+            if ws is None:                          # 없으면 생성
+                ws = sh.add_worksheet(title=str(ws_name), rows=2000, cols=8)
         else:
-            ws = sh.sheet1                             # 미지정 시 첫 번째 탭
-        if ws.acell("A1").value != "date":       # 헤더 없으면 생성
+            ws = sh.sheet1                          # 미지정 시 첫 번째 탭
+        if ws.acell("A1").value != "date":          # 헤더 없으면 생성
             ws.update("A1:D1", [HEADER])
+        LAST_STATUS = f"연결 OK (worksheet={ws.title})"
         return ws
-    except Exception:
+    except Exception as e:
+        LAST_STATUS = f"실패: {type(e).__name__}: {e}"
         return None
+
+
+def status() -> str:
+    _worksheet()   # 초기화 유도(캐시됨)
+    return LAST_STATUS
 
 
 def bump(kind: str) -> None:
