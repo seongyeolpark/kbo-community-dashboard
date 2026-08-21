@@ -163,9 +163,13 @@ extra_sw_raw = st.sidebar.text_input(
 extra_sw = {s for s in extra_sw_raw.split(",")} if extra_sw_raw else set()
 run = st.sidebar.button("🔍 수집 & 분석", type="primary", use_container_width=True)
 
-# 진단 모드: URL에 ?debug=1 붙이면 지표 기록 연결 상태를 표시
+# 진단 모드: URL에 ?debug=1 붙이면 지표 기록 연결 상태를 표시(앱을 죽이지 않도록 방어)
 if st.query_params.get("debug") == "1":
-    st.sidebar.caption(f"🔧 지표기록 상태: {metrics.status()}")
+    try:
+        _st_fn = getattr(metrics, "status", None)
+        st.sidebar.caption(f"🔧 지표기록 상태: {_st_fn() if _st_fn else '구버전 모듈(리부트 필요)'}")
+    except Exception as _e:
+        st.sidebar.caption(f"🔧 지표기록 상태 확인 실패: {type(_e).__name__}: {_e}")
 
 
 # ------------------------------------------------------------------ 데이터 수집
